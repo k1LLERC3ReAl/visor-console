@@ -1,0 +1,185 @@
+/*
+ * BARRA IM-16 (QRE1113 × 74HC4067)
+ * LECTURA SIMPLE - Compatible con visor_console
+ *
+ * Hardware:
+ *   Arduino Nano
+ *   Barra IM-16: SL0→A0, SL1→A1, SL2→A2, SL3→A3, OM→A4, LON→GND, +5V→VCC, GND→GND
+ *   LED indicador: D13
+ */
+
+// ---------- Pines barra IM-16 ----------
+#define PIN_SL0  A0
+#define PIN_SL1  A1
+#define PIN_SL2  A2
+#define PIN_SL3  A3
+#define PIN_OM   A4
+
+#define NUM_SENSORES 16
+
+// ---------- Botón y LED ----------
+#define PIN_BOTON  2
+#define LED 13
+
+// ---------- Calibración ----------
+int calMin[NUM_SENSORES];
+int calMax[NUM_SENSORES];
+
+// ===================== LECTURA MUX =====================
+
+int leerSensor(int canal) {
+  digitalWrite(PIN_SL0, (canal >> 0) & 1);
+  digitalWrite(PIN_SL1, (canal >> 1) & 1);
+  digitalWrite(PIN_SL2, (canal >> 2) & 1);
+  digitalWrite(PIN_SL3, (canal >> 3) & 1);
+  delayMicroseconds(10);
+  return analogRead(PIN_OM);
+}
+
+void leerTodos(int* valores) {
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    valores[i] = leerSensor(i);
+  }
+}
+
+// ===================== ESPERAR BOTÓN =====================
+
+void esperarBoton(const char* mensaje) {
+  Serial.println(mensaje);
+
+  while (digitalRead(PIN_BOTON) == HIGH) {
+    delay(10);
+  }
+  delay(50);
+
+  while (digitalRead(PIN_BOTON) == LOW) {
+    delay(10);
+  }
+  delay(50);
+}
+
+// ===================== CALIBRACIÓN INSTANTÁNEA =====================
+
+void calibrar() {
+  int valores[NUM_SENSORES];
+
+  Serial.println();
+  Serial.println("INICIANDO CALIBRACION");
+
+  // PASO 1: Calibración NEGRO (máximo)
+  esperarBoton("PASO 1: Coloque la barra sobre NEGRO");
+
+  digitalWrite(LED, HIGH);
+  leerTodos(valores);
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    calMax[i] = valores[i];
+  }
+  digitalWrite(LED, LOW);
+  Serial.println("Calibracion NEGRO completada");
+  delay(500);
+
+  // PASO 2: Calibración BLANCO (mínimo)
+  esperarBoton("PASO 2: Coloque la barra sobre BLANCO");
+
+  digitalWrite(LED, HIGH);
+  leerTodos(valores);
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    calMin[i] = valores[i];
+  }
+  digitalWrite(LED, LOW);
+  Serial.println("Calibracion BLANCO completada");
+
+  // Enviar calibración en formato compatible
+  Serial.print("Min: ");
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    Serial.print(calMin[i]);
+    if (i < NUM_SENSORES - 1) Serial.print("\t");
+  }
+  Serial.println();
+
+  Serial.print("Max: ");
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    Serial.print(calMax[i]);
+    if (i < NUM_SENSORES - 1) Serial.print("\t");
+  }
+  Serial.println();
+
+  // Encabezado de sensores
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    Serial.print("S");
+    if (i < 10) Serial.print("0");
+    Serial.print(i);
+    if (i < NUM_SENSORES - 1) Serial.print("\t");
+  }
+  Serial.println("\tPos");
+
+  delay(1000);
+}
+
+// ===================== LECTURA DE POSICIÓN =====================
+
+int leerPosicion() {
+  int valores[NUM_SENSORES];
+  leerTodos(valores);
+
+  long suma_pond = 0;
+  long suma_val  = 0;
+
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    int v = map(valores[i], calMin[i], calMax[i], 0, 1000);
+    v = constrain(v, 0, 1000);
+
+    suma_pond += (long)v * (i * 1000);
+    suma_val  += v;
+  }
+
+  if (suma_val < 500) return -1;
+
+  return (int)(suma_pond / suma_val);
+}
+
+// ===================== SETUP =====================
+
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+
+  // Configurar pines
+  pinMode(PIN_SL0, OUTPUT);
+  pinMode(PIN_SL1, OUTPUT);
+  pinMode(PIN_SL2, OUTPUT);
+  pinMode(PIN_SL3, OUTPUT);
+  pinMode(PIN_BOTON, INPUT_PULLUP);
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
+
+  // Inicializar arrays de calibración
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    calMin[i] = 1023;
+    calMax[i] = 0;
+  }
+
+  delay(500);
+
+  // Calibración interactiva
+  calibrar();
+}
+
+// ===================== LOOP =====================
+
+void loop() {
+  int valores[NUM_SENSORES];
+  int posicion = leerPosicion();
+
+  // Leer todos los sensores
+  leerTodos(valores);
+
+  // Enviar valores tabulados + posición
+  for (int i = 0; i < NUM_SENSORES; i++) {
+    Serial.print(valores[i]);
+    Serial.print("\t");
+  }
+  Serial.println(posicion);
+
+  delay(250);
+}

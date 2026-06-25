@@ -1,0 +1,27 @@
+# Compiled objects
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+
+# Backup and restore files
+backup_fw.hex
+*.hex
+
+# Configuration (user-local)
+.claude/
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+build/
+dist/
