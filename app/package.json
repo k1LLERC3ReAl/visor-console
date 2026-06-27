@@ -1,0 +1,15 @@
+{
+  "name": "visor-consola",
+  "version": "2.0.0",
+  "description": "Visor Barra de Sensores - Interfaz grafica",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^28.3.3"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.61.1"
+  }
+}

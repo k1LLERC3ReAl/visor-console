@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file:">
+  <title>Visor Consola</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+<header class="topbar">
+  <div class="topbar-left">
+    <span class="logo">◈</span>
+    <span class="logo-text">VISOR CONSOLA</span>
+    <span class="version">v2.0</span>
+  </div>
+  <div class="topbar-center">
+    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" data-tab="config">Configuración</button>
+    <button class="tab-btn" data-tab="log">Log</button>
+  </div>
+  <div class="topbar-right">
+    <span id="conn-dot" class="conn-dot disconnected"></span>
+    <span id="conn-label" class="conn-label">Sin conexión</span>
+  </div>
+</header>
+
+<!-- ── Main layout ──────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <label class="field-label">Puerto COM</label>
+      <div class="input-row">
+        <select id="sel-port" class="select"></select>
+        <button id="btn-refresh-ports" class="icon-btn" title="Detectar puertos">⟳</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <label class="field-label">Baudrate</label>
+      <select id="sel-baudrate" class="select">
+        <option value="9600">9600</option>
+        <option value="19200">19200</option>
+        <option value="38400">38400</option>
+        <option value="57600">57600</option>
+        <option value="115200" selected>115200</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <label class="field-label">Placa (Board)</label>
+      <select id="sel-board" class="select">
+        <option value="arduino:avr:nano:cpu=atmega328old">Nano (old bootloader)</option>
+        <option value="arduino:avr:nano:cpu=atmega328p">Nano (new bootloader)</option>
+        <option value="arduino:avr:uno">Arduino Uno</option>
+        <option value="arduino:avr:mega:cpu=atmega2560">Arduino Mega 2560</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <label class="field-label">Tipo de barra</label>
+      <select id="sel-bartype" class="select">
+        <option value="0">QTR-8RC (8 sensores)</option>
+        <option value="1">IM-HEM-005 (16 sensores)</option>
+      </select>
+      <div id="bar-thumb-wrap" class="bar-thumb-wrap">
+        <img id="bar-thumb" src="assets/qtr8rc.jpg" alt="QTR-8RC" class="bar-thumb">
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <label class="field-label">Umbral Negro <span class="threshold-hint">≥</span></label>
+      <input id="inp-thr-black" type="number" class="input" min="0" max="1000" value="700">
+    </div>
+
+    <div class="sidebar-section">
+      <label class="field-label">Umbral Blanco <span class="threshold-hint">&lt;</span></label>
+      <input id="inp-thr-white" type="number" class="input" min="0" max="1000" value="300">
+    </div>
+
+    <div class="sidebar-section">
+      <label class="field-label">Timeout (ms)</label>
+      <input id="inp-timeout" type="number" class="input" min="100" max="30000" value="2000">
+    </div>
+
+    <div class="sidebar-actions">
+      <button id="btn-save" class="btn btn-secondary">Guardar config</button>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-actions">
+      <button id="btn-monitor" class="btn btn-primary">
+        <span class="btn-icon">▶</span> Solo monitorear
+      </button>
+      <button id="btn-diagnostic" class="btn btn-accent">
+        <span class="btn-icon">⚡</span> Diagnóstico completo
+      </button>
+      <button id="btn-stop" class="btn btn-danger" style="display:none">
+        <span class="btn-icon">■</span> Detener
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+
+    <!-- ── Dashboard tab ─────────────────────────────────────────────── -->
+    <div id="tab-dashboard" class="tab-panel active">
+
+      <!-- Idle state -->
+      <div id="state-idle" class="state-panel">
+        <div class="idle-card">
+          <div class="idle-icon">◈</div>
+          <h2 class="idle-title">Visor Barra de Sensores</h2>
+          <p class="idle-sub">Selecciona el puerto y la configuración en el panel izquierdo,<br>
+          luego presiona <strong>Monitorear</strong> o <strong>Diagnóstico completo</strong>.</p>
+          <div class="idle-badges">
+            <span class="badge">QTR-8RC</span>
+            <span class="badge">IM-HEM-005</span>
+            <span class="badge">Arduino CLI</span>
+            <span class="badge">avrdude</span>
+          </div>
+          <img id="idle-bar-img" src="assets/qtr8rc.jpg" alt="Barra de sensores" class="idle-bar-img">
+        </div>
+      </div>
+
+      <!-- Waiting/connecting state -->
+      <div id="state-waiting" class="state-panel" style="display:none">
+        <div class="waiting-card">
+          <div class="spinner"></div>
+          <p id="waiting-msg" class="waiting-msg">Conectando...</p>
+        </div>
+      </div>
+
+      <!-- Calibrating state -->
+      <div id="state-calibrating" class="state-panel" style="display:none">
+        <div class="calib-panel">
+          <div class="calib-header-row">
+            <div id="calib-spinner" class="calib-spinner"></div>
+            <div>
+              <div class="calib-title">Calibrando sensores</div>
+              <div class="calib-sub">El Arduino está midiendo el rango óptico de cada sensor.</div>
+            </div>
+          </div>
+          <div class="calib-body">
+            <div class="calib-instructions">
+              <div class="calib-step">
+                <span class="calib-step-num">1</span>
+                <span>Pasa la barra de sensores lentamente sobre una superficie <strong>negra</strong></span>
+              </div>
+              <div class="calib-step">
+                <span class="calib-step-num">2</span>
+                <span>Luego pásala sobre una superficie <strong>blanca</strong></span>
+              </div>
+              <div class="calib-step">
+                <span class="calib-step-num">3</span>
+                <span>El Arduino detecta los valores mínimos y máximos automáticamente</span>
+              </div>
+            </div>
+            <img id="calib-bar-img" src="assets/qtr8rc.jpg" alt="Barra de sensores" class="calib-bar-img">
+          </div>
+          <div class="calib-note">
+            Para QTR-8RC la calibración es automática (~10 s). Para IM-HEM-005 presiona el botón de la placa.
+          </div>
+          <div id="calib-done-badge" class="calib-done-badge" style="display:none">
+            ✓ Calibración completada — iniciando lectura en tiempo real...
+          </div>
+        </div>
+      </div>
+
+      <!-- Sensor dashboard (monitoring) -->
+      <div id="state-monitor" class="state-panel" style="display:none">
+        <div class="monitor-header">
+          <div class="monitor-info">
+            <span id="mon-bar-name" class="mon-bar-name">QTR-8RC</span>
+            <span class="mon-sep">|</span>
+            <span id="mon-port" class="mon-detail">COM3</span>
+            <span class="mon-sep">|</span>
+            <span id="mon-baud" class="mon-detail">115200 bd</span>
+          </div>
+          <div id="freeze-badge" class="freeze-badge" style="display:none">
+            ❄ CONGELADO
+          </div>
+        </div>
+
+        <!-- Sensor grid -->
+        <div id="sensor-grid" class="sensor-grid"></div>
+
+        <!-- Position indicator -->
+        <div class="position-section">
+          <div class="position-label-row">
+            <span class="pos-title">Posición</span>
+            <span id="pos-value" class="pos-value">—</span>
+          </div>
+          <div class="position-track-wrap">
+            <span id="pos-min" class="pos-range-label">—</span>
+            <div class="position-track">
+              <div id="pos-needle" class="pos-needle" style="left:50%"></div>
+              <div class="pos-center-mark"></div>
+            </div>
+            <span id="pos-max" class="pos-range-label">—</span>
+          </div>
+        </div>
+
+        <!-- Summary -->
+        <div id="summary-row" class="summary-row">
+          <div class="summary-item negro">
+            <span class="summary-dot"></span>
+            <span class="summary-label">Negro</span>
+            <span id="sum-negro" class="summary-count">0</span>
+          </div>
+          <div class="summary-item gris">
+            <span class="summary-dot"></span>
+            <span class="summary-label">Gris</span>
+            <span id="sum-gris" class="summary-count">0</span>
+          </div>
+          <div class="summary-item blanco">
+            <span class="summary-dot"></span>
+            <span class="summary-label">Blanco</span>
+            <span id="sum-blanco" class="summary-count">0</span>
+          </div>
+          <div id="timeout-badge" class="timeout-badge" style="display:none">
+            ⚠ SIN DATOS
+          </div>
+        </div>
+      </div>
+
+      <!-- Diagnostic steps -->
+      <div id="state-diagnostic" class="state-panel" style="display:none">
+        <div class="diag-steps-panel">
+          <h3 class="diag-title">Diagnóstico completo</h3>
+          <div class="diag-steps" id="diag-steps">
+            <div class="diag-step pending" data-step="1">
+              <div class="step-num">1</div>
+              <div class="step-content">
+                <div class="step-name">Guardar firmware</div>
+                <div class="step-desc">Backup con avrdude</div>
+              </div>
+              <div class="step-status-icon">○</div>
+            </div>
+            <div class="diag-step pending" data-step="2">
+              <div class="step-num">2</div>
+              <div class="step-content">
+                <div class="step-name">Ajustar baudrate</div>
+                <div class="step-desc">Parchar el sketch .ino</div>
+              </div>
+              <div class="step-status-icon">○</div>
+            </div>
+            <div class="diag-step pending" data-step="3">
+              <div class="step-num">3</div>
+              <div class="step-content">
+                <div class="step-name">Compilar y flashear</div>
+                <div class="step-desc">arduino-cli compile + upload</div>
+              </div>
+              <div class="step-status-icon">○</div>
+            </div>
+            <div class="diag-step pending" data-step="4">
+              <div class="step-num">4</div>
+              <div class="step-content">
+                <div class="step-name">Esperar reinicio</div>
+                <div class="step-desc">Arduino calibra sensores</div>
+              </div>
+              <div class="step-status-icon">○</div>
+            </div>
+            <div class="diag-step pending" data-step="5">
+              <div class="step-num">5</div>
+              <div class="step-content">
+                <div class="step-name">Monitoreo en tiempo real</div>
+                <div class="step-desc">Lectura de sensores activa</div>
+              </div>
+              <div class="step-status-icon">○</div>
+            </div>
+          </div>
+        </div>
+        <!-- Sensor dashboard embeds here during step 5 -->
+        <div id="diag-sensor-area" style="display:none"></div>
+      </div>
+
+      <!-- Restoring state -->
+      <div id="state-restoring" class="state-panel" style="display:none">
+        <div class="waiting-card">
+          <div class="spinner accent"></div>
+          <p class="waiting-msg">Restaurando firmware original...</p>
+          <p class="waiting-sub">avrdude flasheando el backup</p>
+        </div>
+      </div>
+
+      <!-- Error state -->
+      <div id="state-error" class="state-panel" style="display:none">
+        <div class="error-card">
+          <div class="error-icon">✕</div>
+          <h3 class="error-title">Error</h3>
+          <p id="error-msg" class="error-msg"></p>
+          <button id="btn-error-ok" class="btn btn-secondary">Volver al inicio</button>
+        </div>
+      </div>
+
+    </div><!-- end tab-dashboard -->
+
+    <!-- ── Config tab ─────────────────────────────────────────────────── -->
+    <div id="tab-config" class="tab-panel" style="display:none">
+      <div class="config-panel">
+        <h2 class="panel-title">Configuración guardada</h2>
+        <p class="panel-sub">Estos valores se leen de <code>config.ini</code>.
+           Los cambios en el sidebar se guardan automáticamente al presionar
+           <em>Guardar config</em>.</p>
+        <div id="config-display" class="config-table"></div>
+      </div>
+    </div>
+
+    <!-- ── Log tab ────────────────────────────────────────────────────── -->
+    <div id="tab-log" class="tab-panel" style="display:none">
+      <div class="log-panel">
+        <div class="log-toolbar">
+          <span class="panel-title">Salida de herramientas</span>
+          <button id="btn-clear-log" class="icon-btn">Limpiar</button>
+        </div>
+        <pre id="log-output" class="log-output"></pre>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
