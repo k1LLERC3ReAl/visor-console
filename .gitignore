@@ -25,3 +25,7 @@ Thumbs.db
 # Build artifacts
 build/
 dist/
+
+# Electron / Node
+app/node_modules/
+app/verify*.mjs
