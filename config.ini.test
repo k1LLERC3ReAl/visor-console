@@ -1,9 +1,0 @@
-[serial]
-port=COM3
-baudrate=115200
-
-[bar]
-bar_type=5
-threshold_black=700
-threshold_white=300
-timeout_ms=2000
