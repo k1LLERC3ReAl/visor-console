@@ -29,3 +29,6 @@ dist/
 # Electron / Node
 app/node_modules/
 app/verify*.mjs
+
+# personal config files
+*.ini
